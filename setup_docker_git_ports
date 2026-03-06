@@ -115,27 +115,86 @@ check_and_install_docker() {
 # sudo usermod -aG docker $USER && newgrp docker
 
 #automaic setup to allow docker exe commands without sudo:
-# -------------------------------------------------------------
+## -------------------------------------------------------------
+#allow_docker_run_without_sudo() {
+#echo "running: allow_docker_run_without_sudo"
+##  garantee docker group exists
+#  if ! getent group docker >/dev/null; then
+#    echo "Creating docker group..."
+#    sudo groupadd docker
+#  fi
+#
+## garantee user is un docker group
+#  if id -nG "$USER" | grep -qw docker; then
+#    echo "User $USER is already in docker group."
+#  else
+#    echo "Adding $USER to docker group..."
+#    sudo usermod -aG docker "$USER"
+#    echo "You must log out and log back in for this to take effect."
+#  fi
+#}
+## -------------------------------------------------------------
+
 allow_docker_run_without_sudo() {
-echo "running: allow_docker_run_without_sudo"
-#  garantee docker group exists
+  echo "Running: allow_docker_run_without_sudo"
+
+  # Safely get the actual user, even if the script is run with sudo
+  local TARGET_USER="${SUDO_USER:-$USER}"
+  local ACTION_NEEDED=false
+
+  # 1. Guarantee docker group exists
   if ! getent group docker >/dev/null; then
-    echo "Creating docker group..."
+    echo "--> Creating docker group..."
     sudo groupadd docker
+  else
+    echo "--> Docker group already exists."
   fi
 
-# garantee user is un docker group
-  if id -nG "$USER" | grep -qw docker; then
-    echo "User $USER is already in docker group."
+  # 2. Guarantee user is in docker group
+  if id -nG "$TARGET_USER" | grep -qw docker; then
+    echo "--> User '$TARGET_USER' is already in the docker group."
   else
-    echo "Adding $USER to docker group..."
-    sudo usermod -aG docker "$USER"
-    echo "You must log out and log back in for this to take effect."
+    echo "--> Adding '$TARGET_USER' to the docker group..."
+    sudo usermod -aG docker "$TARGET_USER"
+    ACTION_NEEDED=true
+  fi
+
+  # 3. Check docker socket permissions
+  local SOCK_FILE="/var/run/docker.sock"
+  if [ -e "$SOCK_FILE" ]; then
+    # Get the group ownership of the socket file
+    local SOCK_GROUP=$(stat -c '%G' "$SOCK_FILE")
+    if [ "$SOCK_GROUP" != "docker" ]; then
+      echo "--> WARNING: $SOCK_FILE is owned by group '$SOCK_GROUP', not 'docker'."
+      ACTION_NEEDED=true
+    else
+      echo "--> Socket file ownership looks good."
+    fi
+  else
+    echo "--> WARNING: $SOCK_FILE not found. Is the Docker daemon running?"
+  fi
+
+  # 4. Provide clear manual instructions if changes were made
+  if [ "$ACTION_NEEDED" = true ]; then
+    echo ""
+    echo "====================================================="
+    echo " ⚠️ ACTION REQUIRED: Updates were made."
+    echo "====================================================="
+    echo " To apply group changes immediately in THIS terminal execute:"
+    echo "    newgrp docker"
+    echo ""
+    echo " To Check if docker is the groups execute: groups"
+    echo ""
+    echo " If the socket file had the wrong group, restart the daemon:"
+    echo "    sudo systemctl restart docker"
+    echo ""
+    echo " Note: For full system awareness (like inside VS Code or"
+    echo " your desktop environment), you must LOG OUT and LOG IN."
+    echo "====================================================="
+  else
+    echo "--> All set! Docker should already run without sudo for '$TARGET_USER'."
   fi
 }
-# -------------------------------------------------------------
-
-
 
 
 ##
@@ -247,7 +306,6 @@ check_port() {
 
   if [ -n "$valid" ]; then
     echo "Port ${1} appears to already be in use."
-    echo
     echo "Command using port ${1}"
     lsof -i tcp:${1} -s tcp:listen
     echo
@@ -293,7 +351,6 @@ check_ports
 
 echo
 echo "Environment verified successfully (Docker, Git, Ports, Resources)."
-echo "Ready for Odoo 19 configuration."
 echo
 
 # Placeholder for Odoo logic
