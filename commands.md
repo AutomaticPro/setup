@@ -4,6 +4,13 @@ Unique Command
 wget -qO- https://raw.githubusercontent.com/AutomaticPro/setup/refs/heads/main/setup_docker_git_ports | sudo bash
 ```
 
+Command when change not getting the latest version, when running the command
+```bash
+curl -s -H "Cache-Control: no-cache" \
+https://raw.githubusercontent.com/AutomaticPro/setup/main/setup_docker_git_ports | sudo bash
+```
+
+
 Mutiple Commands (review first)
 ```bash
 wget https://raw.githubusercontent.com/AutomaticPro/setup/refs/heads/main/setup_docker_git_ports -O setup_docker_git_ports
